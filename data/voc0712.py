@@ -136,7 +136,10 @@ class VOCDetection(data.Dataset):
             img = img[:, :, (2, 1, 0)]
             # img = img.transpose(2, 0, 1)
             target = np.hstack((boxes, np.expand_dims(labels, axis=1)))
-        return torch.from_numpy(img).permute(2, 0, 1), target, height, width
+
+        fimg = torch.from_numpy(img).permute(2, 0, 1)
+
+        return fimg, target, height, width
         # return torch.from_numpy(img), target, height, width
 
     def pull_image(self, index):

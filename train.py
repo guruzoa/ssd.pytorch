@@ -14,6 +14,7 @@ import torch.nn.init as init
 import torch.utils.data as data
 import numpy as np
 import argparse
+from data.data_augment import preproc
 
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
@@ -27,9 +28,9 @@ def cycle(iterable):
 parser = argparse.ArgumentParser(
     description='Single Shot MultiBox Detector Training With Pytorch')
 train_set = parser.add_mutually_exclusive_group()
-parser.add_argument('--dataset', default='VOC', choices=['VOC', 'COCO', 'VisDrone'],
+parser.add_argument('--dataset', default='VIS', choices=['VOC', 'COCO', 'VIS'],
                     type=str, help='VOC or COCO or VisDrone')
-parser.add_argument('--dataset_root', default=VOC_ROOT,
+parser.add_argument('--dataset_root', default=VIS_ROOT,
                     help='Dataset root directory path')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth',
                     help='Pretrained base model')
@@ -84,6 +85,22 @@ def train():
         dataset = COCODetection(root=args.dataset_root,
                                 transform=SSDAugmentation(cfg['min_dim'],
                                                           MEANS))
+
+    elif args.dataset == 'VIS':
+        if args.dataset_root == COCO_ROOT:
+            parser.error('Must specify dataset if specifying dataset_root')
+        elif args.dataset_root == VOC_ROOT:
+            parser.error('Must specify dataset if specifying dataset_root')
+
+        cfg = vis
+
+        _preproc = preproc(cfg['min_dim'], MEANS, 0.6)
+        dataset = VisDroneDetection(root=args.dataset_root,
+                                    image_sets=['VisDrone2019-VID-train'],
+                                    target_transform=SSDAugmentation(cfg['min_dim'],
+                                                         MEANS),
+                                    preproc=_preproc)
+
     elif args.dataset == 'VOC':
         if args.dataset_root == COCO_ROOT:
             parser.error('Must specify dataset if specifying dataset_root')
@@ -91,6 +108,8 @@ def train():
         dataset = VOCDetection(root=args.dataset_root,
                                transform=SSDAugmentation(cfg['min_dim'],
                                                          MEANS))
+
+
 
     if args.visdom:
         import visdom
@@ -207,12 +226,22 @@ def train():
             print('iter ' + repr(iteration) + ' || Loss: %.4f , Loc Loss : %.4f , Conf Loss : %.4f ||' % (loss.item(), loss_l.item(), loss_c.item()), end=' ')
 
         if args.visdom:
-            update_vis_plot(iteration, loss_l.data[0], loss_c.data[0],
+            # update_vis_plot(iteration, loss_l.data[0], loss_c.data[0],
+            #                 iter_plot, epoch_plot, 'append')
+            update_vis_plot(iteration, loss_l.item(), loss_c.item(),
                             iter_plot, epoch_plot, 'append')
 
         if iteration != 0 and iteration % 5000 == 0:
             print('Saving state, iter:', iteration)
-            torch.save(ssd_net.state_dict(), 'weights/ssd300_VOC_' +
+
+            if args.dataset == 'VIS':
+                weights_name = 'weights/ssd300_VIS_'
+            elif args.dataset == 'VOC':
+                weights_name = 'weights/ssd300_VOC_'
+            elif args.dataset == 'COCO':
+                weights_name = 'weights/ssd300_COCO_'
+
+            torch.save(ssd_net.state_dict(), weights_name +
                        repr(iteration) + '.pth')
     torch.save(ssd_net.state_dict(),
                args.save_folder + '' + args.dataset + '.pth')
